@@ -2,32 +2,60 @@ package com.github.tatisled.sparkbatchingapp;
 
 import com.github.tatisled.sparkbatchingapp.config.SparkSessionEvaluator;
 import com.github.tatisled.sparkbatchingapp.utils.FileFormatsEnum;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.expressions.Window;
 import org.apache.spark.sql.functions;
 
+import static com.github.tatisled.sparkbatchingapp.config.SparkConfig.EXPEDIA_PATH;
+import static com.github.tatisled.sparkbatchingapp.config.SparkConfig.KAFKA_HOST;
 import static org.apache.spark.sql.functions.col;
 
+/**
+ * Main spark application for work with data from hdfs and kafka
+ *
+ * @author Tatiana_Slednikova
+ * @version 1.0
+ * @since 1.0
+ */
 public class SparkApp {
 
-    protected Dataset<Row> getExpediaData(SparkSession session) {
+    private static final Logger LOG = Logger.getLogger(SparkApp.class);
+
+    /**
+     * Get expedia data from hdfs
+     *
+     * @param session spark session
+     * @return dataset of rows
+     */
+    public Dataset<Row> getExpediaData(SparkSession session) {
+        LOG.info("Loading expedia data...");
         return session.read().format(FileFormatsEnum.AVRO.getFormat())
-                .load("hdfs:///dataset/expedia/*.avro");
+                .load(EXPEDIA_PATH);
     }
 
-    protected Dataset<Row> getHotelData(SparkSession session) {
+    /**
+     * Get hotel data from kafka (parsed)
+     *
+     * @param session spark session
+     * @return dataset of rows
+     */
+    public Dataset<Row> getHotelData(SparkSession session) {
+        LOG.info("Loading hotel data...");
         Dataset<Row> pureHotelData = session.read()
                 .format(FileFormatsEnum.KAFKA.getFormat())
-                .option("kafka.bootstrap.servers", "host.docker.internal:9094")
+                .option("kafka.bootstrap.servers", KAFKA_HOST)
                 .option("subscribe", "hotel-data-topic")
                 .option("startingOffsets", "earliest")
                 .option("endingOffsets", "latest")
                 .load()
                 .select(col("value").cast("string"));
 
+        LOG.info("Loading hotel data schema...");
         String hotelDataJsonSchema = pureHotelData.first().getAs("value").toString();
+        LOG.info("Loaded hotel data schema successfully. Hotel data schema: {" + hotelDataJsonSchema + "}");
 
         return pureHotelData
                 .select(col("value").cast("string"))
@@ -35,9 +63,17 @@ public class SparkApp {
                 .select("value.*");
     }
 
-    protected Dataset<Row> getInvalidExpedia(Dataset<?> expediaWithHotels) {
+    /**
+     * Get invalid expedia data
+     *
+     * @param expediaWithHotels expedia data
+     * @return dataset of rows
+     */
+    public Dataset<Row> getInvalidExpedia(Dataset<?> expediaWithHotels) {
+        LOG.info("Getting invalid expedia data...");
+
         var expediaTemp = expediaWithHotels.as("exp")
-                .withColumn("srch_shifted", functions.lag("exp.srch_ci", 1).over(Window.orderBy("exp.hotel_id", "exp.srch_ci")))
+                .withColumn("srch_shifted", functions.lag("exp.srch_ci", 1).over(Window.partitionBy("exp.hotel_id").orderBy("exp.srch_ci")))
                 .withColumn("diff", functions.datediff(col("exp.srch_ci"), col("srch_shifted")))
                 .orderBy("hotel_id", "srch_ci");
 
@@ -45,11 +81,30 @@ public class SparkApp {
                 .filter(col("diff").lt(30));
     }
 
-    protected Dataset<Row> getValidExpedia(Dataset<Row> expediaData, Object... invalidHotelIds) {
+    /**
+     * Get valid expedia data
+     *
+     * @param expediaData expedia data
+     * @param invalidHotelIds list of invalid hotel ids
+     * @return dataset of rows
+     */
+    public Dataset<Row> getValidExpedia(Dataset<Row> expediaData, Object... invalidHotelIds) {
+        LOG.info("Getting valid expedia data...");
+
         return expediaData.filter(functions.not(col("hotel_id").isin(invalidHotelIds)));
     }
 
-    protected void saveToHDFS(Dataset<?> dataset, String partitionBy, String format, String path) {
+    /**
+     * Save data to hdfs
+     *
+     * @param dataset data to be saved
+     * @param partitionBy column for partitioning
+     * @param format file format
+     * @param path file path
+     */
+    public void saveToHDFS(Dataset<?> dataset, String partitionBy, String format, String path) {
+        LOG.info("Saving data to hdfs, dataset: " + dataset + "; format: " + format + "; path: " + path + "; partitioned by: " + partitionBy + "...");
+
         dataset.write()
                 .partitionBy(partitionBy)
                 .format(format)
@@ -57,7 +112,7 @@ public class SparkApp {
                 .save(path);
     }
 
-    protected void run() {
+    public void run() {
         SparkSession spark = SparkSessionEvaluator.getSparkSession();
 
         Dataset<Row> expediaData = getExpediaData(spark);
