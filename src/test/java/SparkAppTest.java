@@ -7,6 +7,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -94,7 +95,57 @@ public class SparkAppTest {
         Dataset<Row> actualResult = new SparkApp().getInvalidExpedia(expediaWithInvalid);
 
         checkExpediaData(expectedResult, actualResult);
+    }
 
+    @Test
+    public void testEmptyInvalidExpedia() {
+        StructType structType = getExpediaStructType();
+
+        List<Row> expediaRows = new ArrayList<>();
+        List<Row> expectedRows = new ArrayList<>();
+
+        Dataset<Row> expediaWithInvalid = spark.createDataFrame(expediaRows, structType);
+
+        Dataset<Row> expectedResult = spark.createDataFrame(expectedRows, structType);
+        Dataset<Row> actualResult = new SparkApp().getInvalidExpedia(expediaWithInvalid);
+
+        checkExpediaData(expectedResult, actualResult);
+    }
+
+    @Test
+    public void testOneInvalidExpedia() {
+        StructType structType = getExpediaStructType();
+
+        List<Row> expediaRows = new ArrayList<>();
+        expediaRows.add(new GenericRowWithSchema(new Object[]{1L, "2001-03-02", "2001-03-20", 1000L}, structType));
+
+        List<Row> expectedRows = new ArrayList<>();
+
+        Dataset<Row> expediaWithInvalid = spark.createDataFrame(expediaRows, structType);
+
+        Dataset<Row> expectedResult = spark.createDataFrame(expectedRows, structType);
+        Dataset<Row> actualResult = new SparkApp().getInvalidExpedia(expediaWithInvalid);
+
+        checkExpediaData(expectedResult, actualResult);
+    }
+
+    @Test
+    public void testNotFoundInvalidExpedia() {
+        StructType structType = getExpediaStructType();
+
+        List<Row> expediaRows = new ArrayList<>();
+
+        expediaRows.add(new GenericRowWithSchema(new Object[]{1L, "2001-03-02", "2001-03-20", 1000L}, structType));
+        expediaRows.add(new GenericRowWithSchema(new Object[]{6L, "2001-06-05", "2001-06-26", 1003L}, structType));
+
+        List<Row> expectedRows = new ArrayList<>();
+
+        Dataset<Row> expediaWithInvalid = spark.createDataFrame(expediaRows, structType);
+
+        Dataset<Row> expectedResult = spark.createDataFrame(expectedRows, structType);
+        Dataset<Row> actualResult = new SparkApp().getInvalidExpedia(expediaWithInvalid);
+
+        checkExpediaData(expectedResult, actualResult);
     }
 
     @Test
@@ -115,7 +166,67 @@ public class SparkAppTest {
         Dataset<Row> actualResult = new SparkApp().getValidExpedia(expediaWithInvalid, invalidHotelIds);
 
         checkExpediaData(expectedResult, actualResult);
+    }
 
+    @Test
+    public void testEmptyHotelsValidExpedia() {
+        StructType structType = getExpediaStructType();
+
+        List<Row> expediaRows = fillExpediaWithTestData();
+
+        String[] invalidHotelIds = new String[]{};
+
+        List<Row> expectedRows = fillExpediaWithTestData();
+
+        Dataset<Row> expediaWithInvalid = spark.createDataFrame(expediaRows, structType);
+
+        Dataset<Row> expectedResult = spark.createDataFrame(expectedRows, structType);
+        Dataset<Row> actualResult = new SparkApp().getValidExpedia(expediaWithInvalid, invalidHotelIds);
+
+        checkExpediaData(expectedResult, actualResult);
+    }
+
+    @Test
+    public void testEmptyExpediaValidExpedia() {
+        StructType structType = getExpediaStructType();
+
+        List<Row> expediaRows = new ArrayList<>();
+
+        String[] invalidHotelIds = new String[]{"1000", "1003"};
+
+        List<Row> expectedRows = new ArrayList<>();
+
+        Dataset<Row> expediaWithInvalid = spark.createDataFrame(expediaRows, structType);
+
+        Dataset<Row> expectedResult = spark.createDataFrame(expectedRows, structType);
+        Dataset<Row> actualResult = new SparkApp().getValidExpedia(expediaWithInvalid, invalidHotelIds);
+
+        checkExpediaData(expectedResult, actualResult);
+    }
+
+    @Test
+    public void testOneValidExpedia() {
+        StructType structType = getExpediaStructType();
+
+        List<Row> expediaRows = fillExpediaWithTestData();
+
+        String[] invalidHotelIds = new String[]{"1000", "1002", "1003"};
+
+        List<Row> expectedRows = new ArrayList<>();
+        expectedRows.add(new GenericRowWithSchema(new Object[]{2L, "2001-03-22", "2001-03-23", 1001L}, structType));
+        expectedRows.add(new GenericRowWithSchema(new Object[]{3L, "2001-04-10", "2001-04-20", 1001L}, structType));
+
+        Dataset<Row> expediaWithInvalid = spark.createDataFrame(expediaRows, structType);
+
+        Dataset<Row> expectedResult = spark.createDataFrame(expectedRows, structType);
+        Dataset<Row> actualResult = new SparkApp().getValidExpedia(expediaWithInvalid, invalidHotelIds);
+
+        checkExpediaData(expectedResult, actualResult);
+    }
+
+    @AfterAll
+    public static void tearDown(){
+        spark.stop();
     }
 
 }
