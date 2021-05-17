@@ -14,7 +14,7 @@ import static com.github.tatisled.sparkbatchingapp.config.SparkConfig.KAFKA_HOST
 import static org.apache.spark.sql.functions.col;
 
 /**
- * Main spark application for work with data from hdfs and kafka
+ * Main spark application for work with hotel and expedia data from hdfs and kafka
  *
  * @author Tatiana_Slednikova
  * @version 1.0
@@ -84,7 +84,7 @@ public class SparkApp {
     /**
      * Get valid expedia data
      *
-     * @param expediaData expedia data
+     * @param expediaData     expedia data
      * @param invalidHotelIds list of invalid hotel ids
      * @return dataset of rows
      */
@@ -97,10 +97,10 @@ public class SparkApp {
     /**
      * Save data to hdfs
      *
-     * @param dataset data to be saved
+     * @param dataset     data to be saved
      * @param partitionBy column for partitioning
-     * @param format file format
-     * @param path file path
+     * @param format      file format
+     * @param path        file path
      */
     public void saveToHDFS(Dataset<?> dataset, String partitionBy, String format, String path) {
         LOG.info("Saving data to hdfs, dataset: " + dataset + "; format: " + format + "; path: " + path + "; partitioned by: " + partitionBy + "...");
