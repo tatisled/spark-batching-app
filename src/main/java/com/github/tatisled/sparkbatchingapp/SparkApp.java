@@ -72,7 +72,7 @@ public class SparkApp {
     public Dataset<Row> getInvalidExpedia(Dataset<?> expediaWithHotels) {
         LOG.info("Getting invalid expedia data...");
 
-        var expediaTemp = expediaWithHotels.as("exp")
+        Dataset<Row> expediaTemp = expediaWithHotels.as("exp")
                 .withColumn("srch_shifted", functions.lag("exp.srch_ci", 1).over(Window.partitionBy("exp.hotel_id").orderBy("exp.srch_ci")))
                 .withColumn("diff", functions.datediff(col("exp.srch_ci"), col("srch_shifted")))
                 .orderBy("hotel_id", "srch_ci");
@@ -113,36 +113,41 @@ public class SparkApp {
     }
 
     public void run() {
-        SparkSession spark = SparkSessionEvaluator.getSparkSession();
+        try(SparkSession spark = SparkSessionEvaluator.getSparkSession()) {
 
-        Dataset<Row> expediaData = getExpediaData(spark);
-        Dataset<Row> hotelData = getHotelData(spark);
+            Dataset<Row> expediaData = getExpediaData(spark);
+            Dataset<Row> hotelData = getHotelData(spark);
 
-        var expediaWithHotels = expediaData.as("exp")
-                .join(hotelData.as("htl"), col("exp.hotel_id").equalTo(col("htl.Id")));
+            Dataset<Row> expediaWithHotels = expediaData.as("exp")
+                    .join(hotelData.as("htl"), col("exp.hotel_id").equalTo(col("htl.Id")));
 
-        expediaWithHotels.cache();
+            expediaWithHotels.cache();
 
-        var expediaInvalid = getInvalidExpedia(expediaWithHotels);
+            Dataset<Row> expediaInvalid = getInvalidExpedia(expediaWithHotels);
 
-        var invalidHotelIds = expediaInvalid.select("hotel_id").collectAsList().stream().map(row -> row.getAs("hotel_id").toString()).toArray();
+            Object[] invalidHotelIds = expediaInvalid.select("hotel_id").collectAsList().stream().map(row -> row.getAs("hotel_id").toString()).toArray();
 
-        var expediaOkWithHotels = getValidExpedia(expediaWithHotels, invalidHotelIds);
-        var expediaOK = getValidExpedia(expediaData, invalidHotelIds)
-                .withColumn("year", functions.year(col("srch_ci")));
+            Dataset<Row> expediaOkWithHotels = getValidExpedia(expediaWithHotels, invalidHotelIds);
+            Dataset<Row> expediaOK = getValidExpedia(expediaData, invalidHotelIds)
+                    .withColumn("year", functions.year(col("srch_ci")));
 
-        //For screenshot
-        expediaInvalid.show();
-        //For screenshot
-        expediaOkWithHotels.select("Country")
-                .groupBy("Country").count()
-                .show();
-        //For screenshot
-        expediaOkWithHotels.select("City")
-                .groupBy("City").count()
-                .show();
+            //For screenshot
+            expediaInvalid.show();
+            //For screenshot
+            expediaOkWithHotels.select("Country")
+                    .groupBy("Country").count()
+                    .show();
+            //For screenshot
+            expediaOkWithHotels.select("City")
+                    .groupBy("City").count()
+                    .show();
 
-        saveToHDFS(expediaOK, "year", FileFormatsEnum.AVRO.getFormat(), "hdfs:///result/");
+            saveToHDFS(expediaOK, "year", FileFormatsEnum.AVRO.getFormat(), "hdfs:///result/");
+
+            spark.stop();
+        } catch (Exception e) {
+            LOG.error("SparkApp got an error, details: ", e);
+        }
     }
 
     public static void main(String[] args) {

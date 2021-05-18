@@ -1,9 +1,13 @@
 plugins {
+    id 'com.github.johnrengelman.shadow' version '7.0.0'
     id 'java'
+    id 'application'
 }
 
 group 'com.github.tatisled'
 version '1.0'
+
+mainClassName = 'com.github.tatisled.sparkbatchingapp.SparkApp'
 
 repositories {
     mavenCentral()
@@ -18,9 +22,7 @@ dependencies {
     implementation group: 'org.apache.spark', name: 'spark-sql-kafka-0-10_2.12', version: '3.1.1'
     implementation group: 'org.json', name: 'json', version: '20210307'
 
-//    compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '2.0.0-alpha1'
-    compile 'org.slf4j:slf4j-log4j12:1.7.25'
-
+    compileOnly 'org.slf4j:slf4j-log4j12:1.7.25'
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
@@ -28,4 +30,25 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+task extendedJar(type: Jar) {
+    manifest {
+        attributes 'Main-Class': 'com.github.tatisled.sparkbatchingapp.SparkApp'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    } {
+        exclude "META-INF/*.SF"
+        exclude "META-INF/*.DSA"
+        exclude "META-INF/*.RSA"
+    }
+    with jar
+}
+
+shadowJar {
+    manifest {
+        inheritFrom project.tasks.extendedJar.manifest
+    }
+    mergeServiceFiles()
 }
